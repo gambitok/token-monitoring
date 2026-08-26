@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Token Monitoring</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Binance Spot / USDT</p>
+          <h1>Token Monitoring</h1>
+        </div>
+        <button class="button primary" id="refreshPrices" type="button">Refresh Prices</button>
+      </header>
+
+      <section class="summary-grid" aria-label="Portfolio summary">
+        <div class="metric">
+          <span>Invested</span>
+          <strong id="totalInvested">0 USDT</strong>
+        </div>
+        <div class="metric">
+          <span>Current Value</span>
+          <strong id="totalValue">0 USDT</strong>
+        </div>
+        <div class="metric">
+          <span>Total PnL</span>
+          <strong id="totalPnl">0 USDT</strong>
+        </div>
+      </section>
+
+      <section class="active-targets" id="activeTargetsSection" aria-label="Active buy targets">
+        <div class="active-targets-head">
+          <h2>Active Buy Targets</h2>
+          <span>BUY ALLOWED now</span>
+        </div>
+        <div class="active-targets-grid" id="activeTargetsGrid"></div>
+      </section>
+
+      <nav class="tabs" aria-label="Main sections">
+        <button class="tab active" data-tab="portfolio" type="button">Portfolio</button>
+        <button class="tab" data-tab="buyTargets" type="button">Buy Targets</button>
+      </nav>
+
+      <p class="message" id="message" role="status"></p>
+
+      <section class="tab-panel active" id="portfolioPanel">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Add Purchase</h2>
+          </div>
+          <form class="asset-form" id="assetForm">
+            <label>
+              <span>Token</span>
+              <input name="baseSymbol" placeholder="BTC" autocomplete="off" list="tokenSuggestions" required>
+              <datalist id="tokenSuggestions"></datalist>
+            </label>
+            <label>
+              <span>Amount</span>
+              <input name="amount" type="number" min="0" step="any" placeholder="0.01" required>
+            </label>
+            <label>
+              <span>Entry Price</span>
+              <input name="price" type="number" min="0" step="any" placeholder="60000" required>
+            </label>
+            <label>
+              <span>Date</span>
+              <input name="date" type="date" required>
+            </label>
+            <label>
+              <span>Exchange</span>
+              <input name="exchange" placeholder="Binance" autocomplete="off">
+            </label>
+            <button class="button" type="submit">Save Purchase</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Assets</h2>
+            <span id="lastUpdated">-</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Amount</th>
+                  <th>Average Entry</th>
+                  <th>Current Price</th>
+                  <th>Invested</th>
+                  <th>Current Value</th>
+                  <th>PnL</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="assetsBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="emptyAssets">No portfolio assets yet.</div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="buyTargetsPanel">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Save Buy Target</h2>
+          </div>
+          <form class="target-form" id="targetForm">
+            <label>
+              <span>Token</span>
+              <input name="baseSymbol" placeholder="BTC" autocomplete="off" list="targetTokenSuggestions" required>
+              <datalist id="targetTokenSuggestions"></datalist>
+            </label>
+            <label>
+              <span>Buy From</span>
+              <input name="buyFrom" type="number" min="0" step="any" placeholder="52000" required>
+            </label>
+            <label>
+              <span>Buy To</span>
+              <input name="buyTo" type="number" min="0" step="any" placeholder="56000" required>
+            </label>
+            <button class="button" type="submit">Save Target</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Buy Signals</h2>
+          </div>
+          <div class="targets-grid" id="targetsGrid"></div>
+          <div class="empty-state" id="emptyTargets">No buy targets yet.</div>
+        </section>
+      </section>
+    </main>
+
+    <template id="detailsTemplate">
+      <tr class="details-row">
+        <td colspan="8">
+          <div class="details">
+            <div class="details-tools">
+              <h3>Purchases</h3>
+              <button class="button danger small delete-asset" type="button">Delete Asset</button>
+            </div>
+
+            <form class="purchase-form">
+              <label>
+                <span>Amount</span>
+                <input name="amount" type="number" min="0" step="any" required>
+              </label>
+              <label>
+                <span>Entry Price</span>
+                <input name="price" type="number" min="0" step="any" required>
+              </label>
+              <label>
+                <span>Date</span>
+                <input name="date" type="date" required>
+              </label>
+              <label>
+                <span>Exchange</span>
+                <input name="exchange" placeholder="Binance" autocomplete="off">
+              </label>
+              <button class="button small" type="submit">Add Purchase</button>
+            </form>
+
+            <div class="purchases"></div>
+          </div>
+        </td>
+      </tr>
+    </template>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
