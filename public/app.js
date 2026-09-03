@@ -19,8 +19,10 @@ const els = {
   activeTargetsGrid: document.querySelector('#activeTargetsGrid'),
   assetsBody: document.querySelector('#assetsBody'),
   targetsGrid: document.querySelector('#targetsGrid'),
+  sellPositionsBody: document.querySelector('#sellPositionsBody'),
   emptyAssets: document.querySelector('#emptyAssets'),
   emptyTargets: document.querySelector('#emptyTargets'),
+  emptySellPositions: document.querySelector('#emptySellPositions'),
   message: document.querySelector('#message'),
   refreshPrices: document.querySelector('#refreshPrices'),
   totalInvested: document.querySelector('#totalInvested'),
@@ -137,6 +139,47 @@ function calculateTarget(target) {
     priceError: priceInfo.error,
     statsError: statsInfo.error
   };
+}
+
+function calculatePurchasePosition(asset, purchase) {
+  const priceInfo = state.prices[asset.symbol] || {};
+  const currentPrice = Number(priceInfo.price);
+  const entryPrice = Number(purchase.price);
+  const amount = Number(purchase.amount);
+  const hasPrice = Number.isFinite(currentPrice);
+  const hasPosition = Number.isFinite(entryPrice) && entryPrice > 0 && Number.isFinite(amount) && amount > 0;
+  const entryValue = hasPosition ? amount * entryPrice : null;
+  const currentValue = hasPrice && hasPosition ? amount * currentPrice : null;
+  const profit = currentValue === null || entryValue === null ? null : currentValue - entryValue;
+  const profitPercent = profit === null || entryValue === 0 ? null : (profit / entryValue) * 100;
+
+  return {
+    amount,
+    entryPrice,
+    currentPrice,
+    entryValue,
+    currentValue,
+    profit,
+    profitPercent,
+    hasPrice,
+    hasPosition
+  };
+}
+
+function getProfitablePositions() {
+  const positions = [];
+
+  for (const asset of state.assets) {
+    for (const purchase of asset.purchases || []) {
+      const calc = calculatePurchasePosition(asset, purchase);
+
+      if (calc.profit > 0) {
+        positions.push({ asset, purchase, calc });
+      }
+    }
+  }
+
+  return positions.sort((a, b) => b.calc.profit - a.calc.profit);
 }
 
 function getAssetSortValue(asset, calc, key) {
@@ -487,11 +530,38 @@ function renderActiveTargets() {
   }
 }
 
+function renderSellPositions() {
+  const positions = getProfitablePositions();
+  els.sellPositionsBody.innerHTML = '';
+  els.emptySellPositions.style.display = positions.length ? 'none' : 'block';
+
+  for (const { asset, purchase, calc } of positions) {
+    const row = document.createElement('tr');
+    row.className = 'sell-position-row';
+    row.innerHTML = `
+      <td>
+        <div class="symbol">${asset.baseSymbol}</div>
+        <div class="subtle">${asset.symbol}</div>
+      </td>
+      <td>${formatNumber(calc.amount, 8)}</td>
+      <td>${formatMoney(calc.entryPrice)}</td>
+      <td>${formatMoney(calc.currentPrice)}</td>
+      <td>${formatMoney(calc.entryValue)}</td>
+      <td>${formatMoney(calc.currentValue)}</td>
+      <td class="positive">${formatMoney(calc.profit)} (${formatNumber(calc.profitPercent, 2)}%)</td>
+      <td>${purchase.exchange || '-'}</td>
+      <td>${purchase.date || '-'}</td>
+    `;
+    els.sellPositionsBody.append(row);
+  }
+}
+
 function render() {
   renderSummary();
   renderActiveTargets();
   renderAssets();
   renderTargets();
+  renderSellPositions();
 }
 
 async function loadAssets() {

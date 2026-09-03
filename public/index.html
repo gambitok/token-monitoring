@@ -42,6 +42,7 @@
       <nav class="tabs" aria-label="Main sections">
         <button class="tab active" data-tab="portfolio" type="button">Portfolio</button>
         <button class="tab" data-tab="buyTargets" type="button">Buy Targets</button>
+        <button class="tab" data-tab="sellNow" type="button">Sell Now</button>
       </nav>
 
       <p class="message" id="message" role="status"></p>
@@ -141,6 +142,33 @@
           </div>
           <div class="targets-grid" id="targetsGrid"></div>
           <div class="empty-state" id="emptyTargets">No buy targets yet.</div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="sellNowPanel">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Profitable Positions</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Amount</th>
+                  <th>Entry Price</th>
+                  <th>Current Price</th>
+                  <th>Entry Value</th>
+                  <th>Current Value</th>
+                  <th>Profit Now</th>
+                  <th>Exchange</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="sellPositionsBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="emptySellPositions">No profitable positions right now.</div>
         </section>
       </section>
     </main>
