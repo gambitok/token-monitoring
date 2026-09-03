@@ -11,6 +11,7 @@ Minimal local portfolio monitor for spot tokens. It stores your data in a JSON f
 - Editable purchase history per token
 - Separate buy target tab
 - Active buy targets shown on the main screen
+- Buy target low/high price range for day, week, month, or year
 - Binance USDT token autocomplete
 - JSON file storage
 
@@ -81,6 +82,21 @@ Buy To: 1850
 If the current Binance Spot price is inside the range, the app shows `BUY ALLOWED`. Otherwise it shows `DO NOT BUY`.
 
 All active `BUY ALLOWED` targets are also shown on the main screen.
+
+Buy Signal cards also show the selected period low/high price. The default period is `Day`; available options are `Day`, `Week`, `Month`, and `Year`.
+
+## Deployment
+
+This app writes to `data/assets.json`, so it needs a Node hosting option with persistent writable storage.
+
+Good options:
+
+- VPS
+- Render web service with a persistent disk
+- Railway service with a volume
+- Fly.io app with a volume
+
+Avoid plain static hosting or serverless-only deployments unless you replace JSON file storage with a database or object storage.
 
 ## Notes
 

@@ -28,7 +28,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -101,7 +102,8 @@ h3 {
 
 .metric span,
 label span,
-.target-price span {
+.target-price span,
+.target-range-stat span {
   display: block;
   color: var(--muted);
   font-size: 13px;
@@ -246,7 +248,18 @@ input {
   outline: none;
 }
 
-input:focus {
+select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0d0f11;
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+}
+
+input:focus,
+select:focus {
   border-color: var(--blue);
 }
 
@@ -342,8 +355,9 @@ th {
 
 .sort-button span {
   display: inline-block;
-  width: 10px;
+  width: 32px;
   color: var(--blue);
+  font-size: 10px;
 }
 
 td {
@@ -423,14 +437,50 @@ td {
   padding: 14px;
 }
 
+.period-control {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-control span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .target-price {
   margin: 14px 0;
 }
 
-.target-price strong {
+.target-stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.target-price,
+.target-range-stat {
+  min-width: 0;
+}
+
+.target-price strong,
+.target-range-stat strong {
   display: block;
   margin-top: 4px;
   font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.target-range-stat strong {
+  font-size: 13px;
+}
+
+.target-range-stat span {
+  font-size: 11px;
 }
 
 .empty-state {
@@ -475,6 +525,7 @@ td {
   }
 
   .summary-grid,
+  .target-stats-row,
   .asset-form,
   .purchase-form,
   .purchase-edit,

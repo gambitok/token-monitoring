@@ -2,6 +2,8 @@ const state = {
   assets: [],
   buyTargets: [],
   prices: {},
+  priceStats: {},
+  statsPeriod: '1w',
   openAssetId: null,
   activeTab: 'portfolio',
   assetSort: {
@@ -25,6 +27,7 @@ const els = {
   totalValue: document.querySelector('#totalValue'),
   totalPnl: document.querySelector('#totalPnl'),
   lastUpdated: document.querySelector('#lastUpdated'),
+  statsPeriod: document.querySelector('#statsPeriod'),
   detailsTemplate: document.querySelector('#detailsTemplate'),
   tokenSuggestions: document.querySelector('#tokenSuggestions'),
   targetTokenSuggestions: document.querySelector('#targetTokenSuggestions'),
@@ -116,15 +119,23 @@ function calculateAsset(asset) {
 
 function calculateTarget(target) {
   const priceInfo = state.prices[target.symbol] || {};
+  const statsInfo = state.priceStats[target.symbol] || {};
   const currentPrice = Number(priceInfo.price);
   const hasPrice = Number.isFinite(currentPrice);
+  const low = Number(statsInfo.low);
+  const high = Number(statsInfo.high);
+  const hasStats = Number.isFinite(low) && Number.isFinite(high);
   const canBuy = hasPrice && currentPrice >= Number(target.buyFrom) && currentPrice <= Number(target.buyTo);
 
   return {
     currentPrice,
     hasPrice,
+    low,
+    high,
+    hasStats,
     canBuy,
-    priceError: priceInfo.error
+    priceError: priceInfo.error,
+    statsError: statsInfo.error
   };
 }
 
@@ -192,7 +203,7 @@ function renderSortButtons() {
 
     button.classList.toggle('active', isActive);
     indicator.textContent = isActive
-      ? state.assetSort.direction === 'asc' ? '↑' : '↓'
+      ? state.assetSort.direction === 'asc' ? 'ASC' : 'DESC'
       : '';
   }
 }
@@ -394,6 +405,16 @@ function renderTargets() {
         <button class="button small" type="submit">Save</button>
         <button class="button danger small delete-target" type="button">Delete</button>
       </form>
+      <div class="target-stats-row">
+        <div class="target-range-stat">
+          <span>${state.statsPeriod.toUpperCase()} Low</span>
+          <strong>${calc.hasStats ? formatMoney(calc.low) : '-'}</strong>
+        </div>
+        <div class="target-range-stat">
+          <span>${state.statsPeriod.toUpperCase()} High</span>
+          <strong>${calc.hasStats ? formatMoney(calc.high) : '-'}</strong>
+        </div>
+      </div>
     `;
 
     const editForm = card.querySelector('.target-edit');
@@ -489,11 +510,17 @@ async function loadPrices() {
   els.lastUpdated.textContent = `Updated: ${new Date().toLocaleTimeString('en-US')}`;
 }
 
+async function loadPriceStats() {
+  const data = await api(`/api/price-stats?period=${encodeURIComponent(state.statsPeriod)}`);
+  state.priceStats = data.stats || {};
+}
+
 async function loadAll() {
   try {
     await loadAssets();
     await loadBuyTargets();
     await loadPrices();
+    await loadPriceStats();
     render();
   } catch (error) {
     setMessage(error.message, 'negative');
@@ -588,8 +615,21 @@ els.targetForm.addEventListener('submit', async (event) => {
 els.refreshPrices.addEventListener('click', async () => {
   try {
     await loadPrices();
+    await loadPriceStats();
     render();
     setMessage('Prices refreshed.');
+  } catch (error) {
+    setMessage(error.message, 'negative');
+  }
+});
+
+els.statsPeriod.addEventListener('change', async (event) => {
+  state.statsPeriod = event.target.value;
+
+  try {
+    await loadPriceStats();
+    render();
+    setMessage('Price range updated.');
   } catch (error) {
     setMessage(error.message, 'negative');
   }

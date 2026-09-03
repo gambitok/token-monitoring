@@ -12,6 +12,12 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'assets.json');
 const DEFAULT_PROVIDER = 'binance';
 const DEFAULT_QUOTE = 'USDT';
+const STATS_PERIODS = {
+  '1d': { interval: '1h', limit: 24 },
+  '1w': { interval: '4h', limit: 42 },
+  '1m': { interval: '1d', limit: 30 },
+  '1y': { interval: '1w', limit: 52 }
+};
 
 let symbolCache = {
   loadedAt: 0,
@@ -53,6 +59,10 @@ function toNumber(value) {
 
 function symbolFromBase(baseSymbol, quoteSymbol = DEFAULT_QUOTE) {
   return `${baseSymbol}${quoteSymbol}`;
+}
+
+function normalizeStatsPeriod(value) {
+  return STATS_PERIODS[value] ? value : '1d';
 }
 
 function cleanPurchase(input, existingId = null) {
@@ -234,6 +244,68 @@ async function fetchBinanceSymbols() {
   };
 
   return symbols;
+}
+
+async function fetchBinancePriceStats(symbols, period) {
+  const uniqueSymbols = [...new Set(symbols.filter(Boolean))];
+  const config = STATS_PERIODS[normalizeStatsPeriod(period)];
+
+  if (!uniqueSymbols.length) {
+    return {};
+  }
+
+  const stats = {};
+
+  await Promise.all(uniqueSymbols.map(async (symbol) => {
+    const params = new URLSearchParams({
+      symbol,
+      interval: config.interval,
+      limit: String(config.limit)
+    });
+    const response = await fetch(`https://api.binance.com/api/v3/klines?${params.toString()}`);
+
+    if (!response.ok) {
+      stats[symbol] = {
+        low: null,
+        high: null,
+        error: response.status === 400
+          ? 'Token not found on Binance Spot.'
+          : `Binance API error: ${response.status}`
+      };
+      return;
+    }
+
+    const klines = await response.json();
+    const lows = [];
+    const highs = [];
+
+    for (const kline of Array.isArray(klines) ? klines : []) {
+      const high = Number(kline[2]);
+      const low = Number(kline[3]);
+
+      if (Number.isFinite(high)) {
+        highs.push(high);
+      }
+
+      if (Number.isFinite(low)) {
+        lows.push(low);
+      }
+    }
+
+    stats[symbol] = lows.length && highs.length
+      ? {
+        low: Math.min(...lows),
+        high: Math.max(...highs),
+        error: null
+      }
+      : {
+        low: null,
+        high: null,
+        error: 'Price range is not available.'
+      };
+  }));
+
+  return stats;
 }
 
 app.get('/api/assets', async (req, res) => {
@@ -467,6 +539,34 @@ app.get('/api/prices', async (req, res) => {
     res.json({ provider: DEFAULT_PROVIDER, quoteSymbol: DEFAULT_QUOTE, prices: result });
   } catch (error) {
     res.status(502).json({ error: 'Could not load prices from Binance.', details: error.message });
+  }
+});
+
+app.get('/api/price-stats', async (req, res) => {
+  const data = await readData();
+  const period = normalizeStatsPeriod(req.query.period);
+  const symbols = data.buyTargets.map((target) => target.symbol);
+
+  try {
+    const stats = await fetchBinancePriceStats(symbols, period);
+    const result = {};
+
+    for (const symbol of symbols) {
+      result[symbol] = stats[symbol] || {
+        low: null,
+        high: null,
+        error: 'Price range is not available.'
+      };
+    }
+
+    res.json({
+      provider: DEFAULT_PROVIDER,
+      quoteSymbol: DEFAULT_QUOTE,
+      period,
+      stats: result
+    });
+  } catch (error) {
+    res.status(502).json({ error: 'Could not load price range from Binance.', details: error.message });
   }
 });
 
