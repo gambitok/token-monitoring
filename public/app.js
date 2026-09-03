@@ -3,7 +3,11 @@ const state = {
   buyTargets: [],
   prices: {},
   openAssetId: null,
-  activeTab: 'portfolio'
+  activeTab: 'portfolio',
+  assetSort: {
+    key: 'currentValue',
+    direction: 'desc'
+  }
 };
 
 const els = {
@@ -24,6 +28,7 @@ const els = {
   detailsTemplate: document.querySelector('#detailsTemplate'),
   tokenSuggestions: document.querySelector('#tokenSuggestions'),
   targetTokenSuggestions: document.querySelector('#targetTokenSuggestions'),
+  sortButtons: document.querySelectorAll('.sort-button'),
   tabs: document.querySelectorAll('.tab'),
   tabPanels: document.querySelectorAll('.tab-panel')
 };
@@ -123,6 +128,75 @@ function calculateTarget(target) {
   };
 }
 
+function getAssetSortValue(asset, calc, key) {
+  const values = {
+    token: asset.baseSymbol,
+    amount: calc.totalAmount,
+    averageEntry: calc.averageEntryPrice,
+    currentPrice: calc.hasPrice ? calc.currentPrice : null,
+    invested: calc.totalInvested,
+    currentValue: calc.currentValue,
+    pnl: calc.pnl
+  };
+
+  return values[key];
+}
+
+function compareAssetValues(aValue, bValue) {
+  if (typeof aValue === 'string' || typeof bValue === 'string') {
+    return String(aValue || '').localeCompare(String(bValue || ''), 'en');
+  }
+
+  const aMissing = aValue === null || aValue === undefined || Number.isNaN(aValue);
+  const bMissing = bValue === null || bValue === undefined || Number.isNaN(bValue);
+
+  if (aMissing && bMissing) {
+    return 0;
+  }
+
+  if (aMissing) {
+    return 1;
+  }
+
+  if (bMissing) {
+    return -1;
+  }
+
+  return Number(aValue) - Number(bValue);
+}
+
+function getSortedAssets() {
+  const { key, direction } = state.assetSort;
+  const multiplier = direction === 'asc' ? 1 : -1;
+
+  return state.assets
+    .map((asset, index) => ({
+      asset,
+      index,
+      calc: calculateAsset(asset)
+    }))
+    .sort((a, b) => {
+      const result = compareAssetValues(
+        getAssetSortValue(a.asset, a.calc, key),
+        getAssetSortValue(b.asset, b.calc, key)
+      );
+
+      return result === 0 ? a.index - b.index : result * multiplier;
+    });
+}
+
+function renderSortButtons() {
+  for (const button of els.sortButtons) {
+    const isActive = button.dataset.sort === state.assetSort.key;
+    const indicator = button.querySelector('span');
+
+    button.classList.toggle('active', isActive);
+    indicator.textContent = isActive
+      ? state.assetSort.direction === 'asc' ? '↑' : '↓'
+      : '';
+  }
+}
+
 function renderSummary() {
   const totals = state.assets.reduce((acc, asset) => {
     const calc = calculateAsset(asset);
@@ -145,9 +219,10 @@ function renderSummary() {
 function renderAssets() {
   els.assetsBody.innerHTML = '';
   els.emptyAssets.style.display = state.assets.length ? 'none' : 'block';
+  renderSortButtons();
 
-  for (const asset of state.assets) {
-    const calc = calculateAsset(asset);
+  for (const item of getSortedAssets()) {
+    const { asset, calc } = item;
     const row = document.createElement('tr');
     const pnlClass = calc.pnl === null || calc.pnl >= 0 ? 'positive' : 'negative';
 
@@ -522,6 +597,21 @@ els.refreshPrices.addEventListener('click', async () => {
 
 for (const tab of els.tabs) {
   tab.addEventListener('click', () => setActiveTab(tab.dataset.tab));
+}
+
+for (const button of els.sortButtons) {
+  button.addEventListener('click', () => {
+    const key = button.dataset.sort;
+
+    if (state.assetSort.key === key) {
+      state.assetSort.direction = state.assetSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      state.assetSort.key = key;
+      state.assetSort.direction = key === 'token' ? 'asc' : 'desc';
+    }
+
+    render();
+  });
 }
 
 setActiveTab(state.activeTab);

@@ -321,6 +321,31 @@ th {
   font-weight: 600;
 }
 
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-button:hover,
+.sort-button.active {
+  color: var(--text);
+}
+
+.sort-button span {
+  display: inline-block;
+  width: 10px;
+  color: var(--blue);
+}
+
 td {
   overflow-wrap: anywhere;
 }
