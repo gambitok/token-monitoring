@@ -350,6 +350,11 @@ function renderDetails(asset) {
   });
 
   for (const purchase of asset.purchases) {
+    const calc = calculatePurchasePosition(asset, purchase);
+    const pnlClass = calc.profit === null || calc.profit >= 0 ? 'positive' : 'negative';
+    const pnlText = calc.profit === null
+      ? '-'
+      : `${formatMoney(calc.profit)} (${formatNumber(calc.profitPercent, 2)}%)`;
     const item = document.createElement('div');
     item.className = 'purchase-item';
     item.innerHTML = `
@@ -373,6 +378,20 @@ function renderDetails(asset) {
         <button class="button small" type="submit">Save</button>
         <button class="button danger small delete-purchase" type="button">Delete</button>
       </form>
+      <div class="purchase-pnl-row">
+        <div>
+          <span>Entry Value</span>
+          <strong>${calc.entryValue === null ? '-' : formatMoney(calc.entryValue)}</strong>
+        </div>
+        <div>
+          <span>Current Value</span>
+          <strong>${calc.currentValue === null ? '-' : formatMoney(calc.currentValue)}</strong>
+        </div>
+        <div>
+          <span>Purchase PnL</span>
+          <strong class="${pnlClass}">${pnlText}</strong>
+        </div>
+      </div>
     `;
 
     const editForm = item.querySelector('.purchase-edit');

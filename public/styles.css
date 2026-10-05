@@ -431,6 +431,28 @@ td {
   background: #171b1f;
 }
 
+.purchase-pnl-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.purchase-pnl-row span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.purchase-pnl-row strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .targets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -530,6 +552,7 @@ td {
 
   .summary-grid,
   .target-stats-row,
+  .purchase-pnl-row,
   .asset-form,
   .purchase-form,
   .purchase-edit,
