@@ -10,7 +10,6 @@
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Binance Spot / USDT</p>
           <h1>Token Monitoring</h1>
         </div>
         <button class="button primary" id="refreshPrices" type="button">Refresh Prices</button>
@@ -80,7 +79,7 @@
 
         <section class="panel">
           <div class="panel-head">
-            <h2>Assets</h2>
+            <h2>Assets <small class="subtle">in USDT</small></h2>
             <span id="lastUpdated">-</span>
           </div>
           <div class="table-wrap">
@@ -207,6 +206,8 @@
         </td>
       </tr>
     </template>
+
+    <div class="number-tooltip" id="numberTooltip" hidden></div>
 
     <script src="/app.js" defer></script>
   </body>

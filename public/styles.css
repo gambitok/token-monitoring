@@ -146,22 +146,29 @@ label span,
 
 .active-targets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
 }
 
 .active-target-card {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
   background: #17251d;
 }
 
-.active-target-card strong {
-  display: block;
-  margin-top: 3px;
+.active-target-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.active-target-row strong {
   font-size: 14px;
 }
 
@@ -310,7 +317,19 @@ select:focus {
 }
 
 .table-wrap {
+  container-type: inline-size;
   overflow-x: auto;
+}
+
+.table-wrap table {
+  min-width: 760px;
+}
+
+/* Keep the details form inside the visible area while the table scrolls sideways. */
+.details-row .details {
+  position: sticky;
+  left: 0;
+  max-width: 100cqw;
 }
 
 table {
@@ -362,6 +381,35 @@ th {
 
 td {
   overflow-wrap: anywhere;
+}
+
+.panel-head h2 small {
+  font-weight: 400;
+}
+
+.asset-row td {
+  padding: 6px 8px;
+}
+
+.asset-row .button.small {
+  min-height: 26px;
+}
+
+[data-full] {
+  cursor: help;
+}
+
+.number-tooltip {
+  position: fixed;
+  z-index: 10;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .sell-position-row td {
@@ -517,7 +565,6 @@ td {
 
 @media (max-width: 980px) {
   .summary-grid,
-  .active-target-card,
   .asset-form,
   .purchase-form,
   .purchase-edit,

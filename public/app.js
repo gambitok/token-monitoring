@@ -35,7 +35,8 @@ const els = {
   targetTokenSuggestions: document.querySelector('#targetTokenSuggestions'),
   sortButtons: document.querySelectorAll('.sort-button'),
   tabs: document.querySelectorAll('.tab'),
-  tabPanels: document.querySelectorAll('.tab-panel')
+  tabPanels: document.querySelectorAll('.tab-panel'),
+  numberTooltip: document.querySelector('#numberTooltip')
 };
 
 let symbolSearchTimer = null;
@@ -50,14 +51,60 @@ function formatNumber(value, digits = 2) {
     return '-';
   }
 
+  const abs = Math.abs(value);
+
+  if (abs > 0 && abs < 1) {
+    const [mantissa, exponent] = abs.toExponential(3).split('e');
+    const leadingZeros = -Number(exponent) - 1;
+
+    // 0.00000507 -> 0.0₅507: collapse long runs of zeros after the decimal point.
+    if (leadingZeros >= 3) {
+      const significant = mantissa.replace('.', '').replace(/0+$/, '');
+      const subscript = String(leadingZeros).replace(/[0-9]/g, (digit) => '₀₁₂₃₄₅₆₇₈₉'[digit]);
+      return `${value < 0 ? '-' : ''}0.0${subscript}${significant}`;
+    }
+  }
+
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: digits
+    maximumFractionDigits: abs < 1 ? Math.max(digits, 4) : digits
   }).format(value);
 }
 
 function formatMoney(value) {
   return `${formatNumber(value, 2)} USDT`;
+}
+
+function formatPrice(value) {
+  return `${formatNumber(value, 8)} USDT`;
+}
+
+function formatCompact(value) {
+  const abs = Math.abs(value);
+
+  if (abs >= 1e9) {
+    return `${formatNumber(value / 1e9, 2)}B`;
+  }
+
+  if (abs >= 1e6) {
+    return `${formatNumber(value / 1e6, 2)}M`;
+  }
+
+  if (abs >= 0.001 && abs < 1) {
+    return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 }).format(value);
+  }
+
+  return formatNumber(value, 2);
+}
+
+function formatFull(value) {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: Math.abs(value) < 1 ? 12 : 8
+  }).format(value);
+}
+
+function compactCell(value, unit = 'USDT') {
+  return `<span data-full="${formatFull(value)} ${unit}">${formatCompact(value)}</span>`;
 }
 
 function getFormPayload(form) {
@@ -94,13 +141,18 @@ async function api(path, options = {}) {
   return data;
 }
 
+// Number(null) is 0, which would turn a missing price into a real price of zero.
+function parseApiNumber(value) {
+  return value === null || value === undefined ? NaN : Number(value);
+}
+
 function calculateAsset(asset) {
   const purchases = Array.isArray(asset.purchases) ? asset.purchases : [];
   const totalAmount = purchases.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const totalInvested = purchases.reduce((sum, item) => sum + Number(item.amount || 0) * Number(item.price || 0), 0);
   const averageEntryPrice = totalAmount > 0 ? totalInvested / totalAmount : 0;
   const priceInfo = state.prices[asset.symbol] || {};
-  const currentPrice = Number(priceInfo.price);
+  const currentPrice = parseApiNumber(priceInfo.price);
   const hasPrice = Number.isFinite(currentPrice);
   const currentValue = hasPrice ? totalAmount * currentPrice : null;
   const pnl = hasPrice ? currentValue - totalInvested : null;
@@ -122,10 +174,10 @@ function calculateAsset(asset) {
 function calculateTarget(target) {
   const priceInfo = state.prices[target.symbol] || {};
   const statsInfo = state.priceStats[target.symbol] || {};
-  const currentPrice = Number(priceInfo.price);
+  const currentPrice = parseApiNumber(priceInfo.price);
   const hasPrice = Number.isFinite(currentPrice);
-  const low = Number(statsInfo.low);
-  const high = Number(statsInfo.high);
+  const low = parseApiNumber(statsInfo.low);
+  const high = parseApiNumber(statsInfo.high);
   const hasStats = Number.isFinite(low) && Number.isFinite(high);
   const canBuy = hasPrice && currentPrice >= Number(target.buyFrom) && currentPrice <= Number(target.buyTo);
 
@@ -143,7 +195,7 @@ function calculateTarget(target) {
 
 function calculatePurchasePosition(asset, purchase) {
   const priceInfo = state.prices[asset.symbol] || {};
-  const currentPrice = Number(priceInfo.price);
+  const currentPrice = parseApiNumber(priceInfo.price);
   const entryPrice = Number(purchase.price);
   const amount = Number(purchase.amount);
   const hasPrice = Number.isFinite(currentPrice);
@@ -230,6 +282,11 @@ function getSortedAssets() {
       calc: calculateAsset(asset)
     }))
     .sort((a, b) => {
+      // Assets without a price stay at the bottom in a fixed order, whatever the sort.
+      if (!a.calc.hasPrice || !b.calc.hasPrice) {
+        return b.calc.hasPrice - a.calc.hasPrice || a.index - b.index;
+      }
+
       const result = compareAssetValues(
         getAssetSortValue(a.asset, a.calc, key),
         getAssetSortValue(b.asset, b.calc, key)
@@ -257,12 +314,14 @@ function renderSummary() {
     acc.invested += calc.totalInvested;
     if (calc.hasPrice) {
       acc.value += calc.currentValue;
+      acc.pricedInvested += calc.totalInvested;
     }
     return acc;
-  }, { invested: 0, value: 0 });
+  }, { invested: 0, pricedInvested: 0, value: 0 });
 
-  const pnl = totals.value - totals.invested;
-  const pnlPercent = totals.invested > 0 ? (pnl / totals.invested) * 100 : 0;
+  // Assets without a price are left out of PnL instead of counting as a full loss.
+  const pnl = totals.value - totals.pricedInvested;
+  const pnlPercent = totals.pricedInvested > 0 ? (pnl / totals.pricedInvested) * 100 : 0;
 
   els.totalInvested.textContent = formatMoney(totals.invested);
   els.totalValue.textContent = formatMoney(totals.value);
@@ -280,18 +339,19 @@ function renderAssets() {
     const row = document.createElement('tr');
     const pnlClass = calc.pnl === null || calc.pnl >= 0 ? 'positive' : 'negative';
 
+    row.className = 'asset-row';
     row.innerHTML = `
       <td>
         <div class="symbol">${asset.baseSymbol}</div>
         <div class="subtle">${asset.symbol}</div>
       </td>
-      <td>${formatNumber(calc.totalAmount, 8)}</td>
-      <td>${formatMoney(calc.averageEntryPrice)}</td>
-      <td>${calc.hasPrice ? formatMoney(calc.currentPrice) : '-'}</td>
-      <td>${formatMoney(calc.totalInvested)}</td>
-      <td>${calc.currentValue === null ? '-' : formatMoney(calc.currentValue)}</td>
+      <td>${compactCell(calc.totalAmount, asset.baseSymbol)}</td>
+      <td>${compactCell(calc.averageEntryPrice)}</td>
+      <td>${calc.hasPrice ? compactCell(calc.currentPrice) : '-'}</td>
+      <td>${compactCell(calc.totalInvested)}</td>
+      <td>${calc.currentValue === null ? '-' : compactCell(calc.currentValue)}</td>
       <td class="${pnlClass}">
-        ${calc.pnl === null ? '-' : `${formatMoney(calc.pnl)} (${formatNumber(calc.pnlPercent, 2)}%)`}
+        ${calc.pnl === null ? '-' : `<span data-full="${formatFull(calc.pnl)} USDT (${formatNumber(calc.pnlPercent, 2)}%)">${formatCompact(calc.pnl)} (${formatNumber(Math.round(calc.pnlPercent) + 0, 0)}%)</span>`}
       </td>
       <td><button class="button small details-toggle" type="button">${state.openAssetId === asset.id ? 'Hide' : 'Details'}</button></td>
     `;
@@ -453,7 +513,7 @@ function renderTargets() {
       </div>
       <div class="target-price">
         <span>Current Price</span>
-        <strong>${calc.hasPrice ? formatMoney(calc.currentPrice) : '-'}</strong>
+        <strong>${calc.hasPrice ? formatPrice(calc.currentPrice) : '-'}</strong>
       </div>
       <form class="target-edit">
         <label>
@@ -470,11 +530,11 @@ function renderTargets() {
       <div class="target-stats-row">
         <div class="target-range-stat">
           <span>${state.statsPeriod.toUpperCase()} Low</span>
-          <strong>${calc.hasStats ? formatMoney(calc.low) : '-'}</strong>
+          <strong>${calc.hasStats ? formatPrice(calc.low) : '-'}</strong>
         </div>
         <div class="target-range-stat">
           <span>${state.statsPeriod.toUpperCase()} High</span>
-          <strong>${calc.hasStats ? formatMoney(calc.high) : '-'}</strong>
+          <strong>${calc.hasStats ? formatPrice(calc.high) : '-'}</strong>
         </div>
       </div>
     `;
@@ -531,19 +591,14 @@ function renderActiveTargets() {
     const card = document.createElement('article');
     card.className = 'active-target-card';
     card.innerHTML = `
-      <div>
-        <div class="symbol">${target.baseSymbol}</div>
-        <div class="subtle">${target.symbol}</div>
+      <div class="active-target-row">
+        <span class="symbol">${target.baseSymbol}</span>
+        <strong>${formatPrice(calc.currentPrice)}</strong>
       </div>
-      <div>
-        <span class="subtle">Current</span>
-        <strong>${formatMoney(calc.currentPrice)}</strong>
+      <div class="active-target-row subtle">
+        <span>Range</span>
+        <span>${formatNumber(Number(target.buyFrom), 8)} - ${formatPrice(Number(target.buyTo))}</span>
       </div>
-      <div>
-        <span class="subtle">Range</span>
-        <strong>${formatMoney(Number(target.buyFrom))} - ${formatMoney(Number(target.buyTo))}</strong>
-      </div>
-      <span class="badge buy">BUY ALLOWED</span>
     `;
     els.activeTargetsGrid.append(card);
   }
@@ -563,8 +618,8 @@ function renderSellPositions() {
         <div class="subtle">${asset.symbol}</div>
       </td>
       <td>${formatNumber(calc.amount, 8)}</td>
-      <td>${formatMoney(calc.entryPrice)}</td>
-      <td>${formatMoney(calc.currentPrice)}</td>
+      <td>${formatPrice(calc.entryPrice)}</td>
+      <td>${formatPrice(calc.currentPrice)}</td>
       <td>${formatMoney(calc.entryValue)}</td>
       <td>${formatMoney(calc.currentValue)}</td>
       <td class="positive">${formatMoney(calc.profit)} (${formatNumber(calc.profitPercent, 2)}%)</td>
@@ -575,7 +630,32 @@ function renderSellPositions() {
   }
 }
 
+function showNumberTooltip(target) {
+  const { numberTooltip } = els;
+  numberTooltip.textContent = target.dataset.full;
+  numberTooltip.hidden = false;
+
+  const rect = target.getBoundingClientRect();
+  const box = numberTooltip.getBoundingClientRect();
+  const left = Math.min(rect.left, window.innerWidth - box.width - 8);
+  const top = rect.top - box.height - 6;
+
+  numberTooltip.style.left = `${Math.max(left, 8)}px`;
+  numberTooltip.style.top = `${top < 8 ? rect.bottom + 6 : top}px`;
+}
+
+function updateNumberTooltip(event) {
+  const target = event.target.closest('[data-full]');
+
+  if (target) {
+    showNumberTooltip(target);
+  } else {
+    els.numberTooltip.hidden = true;
+  }
+}
+
 function render() {
+  els.numberTooltip.hidden = true;
   renderSummary();
   renderActiveTargets();
   renderAssets();
@@ -742,6 +822,12 @@ for (const button of els.sortButtons) {
     render();
   });
 }
+
+document.addEventListener('mouseover', updateNumberTooltip);
+document.addEventListener('click', updateNumberTooltip);
+window.addEventListener('scroll', () => {
+  els.numberTooltip.hidden = true;
+}, true);
 
 setActiveTab(state.activeTab);
 loadAll();
