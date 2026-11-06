@@ -10,6 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'assets.json');
+const BACKUP_FILE = `${DATA_FILE}.bak`;
 const DEFAULT_PROVIDER = 'binance';
 const DEFAULT_QUOTE = 'USDT';
 const STATS_PERIODS = {
@@ -26,6 +27,11 @@ let symbolCache = {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Express 4 does not catch rejected async handlers; without this they crash the process.
+function route(handler) {
+  return (req, res, next) => handler(req, res).catch(next);
+}
 
 async function ensureDataFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -161,19 +167,32 @@ function migrateData(parsed) {
   };
 }
 
+function isValidData(parsed) {
+  return Array.isArray(parsed) || Array.isArray(parsed?.assets) || Array.isArray(parsed?.buyTargets);
+}
+
 async function readData() {
   await ensureDataFile();
   const raw = await fs.readFile(DATA_FILE, 'utf8');
+  let parsed;
 
+  // Never fall back to empty data here: the next write would wipe the user's file.
   try {
-    return migrateData(JSON.parse(raw));
-  } catch {
-    return { assets: [], buyTargets: [] };
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Data file data/assets.json is corrupted: ${error.message}. Restore it from data/assets.json.bak.`);
   }
+
+  if (!isValidData(parsed)) {
+    throw new Error(`Data file data/assets.json has an unexpected format. Restore it from data/assets.json.bak.`);
+  }
+
+  return migrateData(parsed);
 }
 
 async function writeData(data) {
   await ensureDataFile();
+  await fs.copyFile(DATA_FILE, BACKUP_FILE);
   await fs.writeFile(DATA_FILE, `${JSON.stringify({
     assets: data.assets || [],
     buyTargets: data.buyTargets || []
@@ -308,12 +327,12 @@ async function fetchBinancePriceStats(symbols, period) {
   return stats;
 }
 
-app.get('/api/assets', async (req, res) => {
+app.get('/api/assets', route(async (req, res) => {
   const data = await readData();
   res.json({ assets: data.assets });
-});
+}));
 
-app.post('/api/assets', async (req, res) => {
+app.post('/api/assets', route(async (req, res) => {
   const data = await readData();
   const baseSymbol = normalizeBaseSymbol(req.body.baseSymbol || req.body.symbol);
 
@@ -349,9 +368,9 @@ app.post('/api/assets', async (req, res) => {
   asset.purchases.push(purchaseResult.purchase);
   await writeData(data);
   res.status(status).json({ asset });
-});
+}));
 
-app.delete('/api/assets/:id', async (req, res) => {
+app.delete('/api/assets/:id', route(async (req, res) => {
   const data = await readData();
   const nextAssets = data.assets.filter((asset) => asset.id !== req.params.id);
 
@@ -363,9 +382,9 @@ app.delete('/api/assets/:id', async (req, res) => {
   data.assets = nextAssets;
   await writeData(data);
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/assets/:id/purchases', async (req, res) => {
+app.post('/api/assets/:id/purchases', route(async (req, res) => {
   const data = await readData();
   const asset = data.assets.find((item) => item.id === req.params.id);
 
@@ -384,9 +403,9 @@ app.post('/api/assets/:id/purchases', async (req, res) => {
   asset.purchases.push(result.purchase);
   await writeData(data);
   res.status(201).json({ purchase: result.purchase });
-});
+}));
 
-app.put('/api/assets/:id/purchases/:purchaseId', async (req, res) => {
+app.put('/api/assets/:id/purchases/:purchaseId', route(async (req, res) => {
   const data = await readData();
   const asset = data.assets.find((item) => item.id === req.params.id);
 
@@ -412,9 +431,9 @@ app.put('/api/assets/:id/purchases/:purchaseId', async (req, res) => {
   asset.purchases[purchaseIndex] = result.purchase;
   await writeData(data);
   res.json({ purchase: result.purchase });
-});
+}));
 
-app.delete('/api/assets/:id/purchases/:purchaseId', async (req, res) => {
+app.delete('/api/assets/:id/purchases/:purchaseId', route(async (req, res) => {
   const data = await readData();
   const asset = data.assets.find((item) => item.id === req.params.id);
 
@@ -433,14 +452,14 @@ app.delete('/api/assets/:id/purchases/:purchaseId', async (req, res) => {
   asset.purchases = purchases;
   await writeData(data);
   res.json({ ok: true });
-});
+}));
 
-app.get('/api/buy-targets', async (req, res) => {
+app.get('/api/buy-targets', route(async (req, res) => {
   const data = await readData();
   res.json({ buyTargets: data.buyTargets });
-});
+}));
 
-app.post('/api/buy-targets', async (req, res) => {
+app.post('/api/buy-targets', route(async (req, res) => {
   const data = await readData();
   const result = cleanBuyTarget(req.body);
 
@@ -463,9 +482,9 @@ app.post('/api/buy-targets', async (req, res) => {
 
   await writeData(data);
   res.status(status).json({ buyTarget: existingIndex === -1 ? result.target : data.buyTargets[existingIndex] });
-});
+}));
 
-app.put('/api/buy-targets/:id', async (req, res) => {
+app.put('/api/buy-targets/:id', route(async (req, res) => {
   const data = await readData();
   const targetIndex = data.buyTargets.findIndex((target) => target.id === req.params.id);
 
@@ -487,9 +506,9 @@ app.put('/api/buy-targets/:id', async (req, res) => {
   data.buyTargets[targetIndex] = result.target;
   await writeData(data);
   res.json({ buyTarget: result.target });
-});
+}));
 
-app.delete('/api/buy-targets/:id', async (req, res) => {
+app.delete('/api/buy-targets/:id', route(async (req, res) => {
   const data = await readData();
   const nextTargets = data.buyTargets.filter((target) => target.id !== req.params.id);
 
@@ -501,9 +520,9 @@ app.delete('/api/buy-targets/:id', async (req, res) => {
   data.buyTargets = nextTargets;
   await writeData(data);
   res.json({ ok: true });
-});
+}));
 
-app.get('/api/symbols', async (req, res) => {
+app.get('/api/symbols', route(async (req, res) => {
   const query = normalizeBaseSymbol(req.query.q).slice(0, 20);
 
   try {
@@ -516,9 +535,9 @@ app.get('/api/symbols', async (req, res) => {
   } catch (error) {
     res.status(502).json({ error: 'Could not load Binance token list.', details: error.message });
   }
-});
+}));
 
-app.get('/api/prices', async (req, res) => {
+app.get('/api/prices', route(async (req, res) => {
   const data = await readData();
   const symbols = [
     ...data.assets.map((asset) => asset.symbol),
@@ -540,9 +559,9 @@ app.get('/api/prices', async (req, res) => {
   } catch (error) {
     res.status(502).json({ error: 'Could not load prices from Binance.', details: error.message });
   }
-});
+}));
 
-app.get('/api/price-stats', async (req, res) => {
+app.get('/api/price-stats', route(async (req, res) => {
   const data = await readData();
   const period = normalizeStatsPeriod(req.query.period);
   const symbols = data.buyTargets.map((target) => target.symbol);
@@ -568,6 +587,11 @@ app.get('/api/price-stats', async (req, res) => {
   } catch (error) {
     res.status(502).json({ error: 'Could not load price range from Binance.', details: error.message });
   }
+}));
+
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.status(error.status || 500).json({ error: error.message });
 });
 
 app.listen(PORT, async () => {

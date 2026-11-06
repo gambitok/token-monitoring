@@ -104,3 +104,4 @@ Avoid plain static hosting or serverless-only deployments unless you replace JSO
 - Quote currency is currently USDT only.
 - The data model keeps `provider` and `quoteSymbol` fields so more sources or currencies can be added later.
 - Fees are not included in calculations.
+- Before each write, the previous version of the data is copied to `data/assets.json.bak`. If `data/assets.json` is corrupted, the API returns an error instead of overwriting it; restore it from the backup.
