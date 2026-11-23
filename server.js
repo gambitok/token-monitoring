@@ -561,6 +561,25 @@ app.get('/api/prices', route(async (req, res) => {
   }
 }));
 
+// Current price of a single token, used to prefill Entry Price in the form.
+app.get('/api/price', route(async (req, res) => {
+  const baseSymbol = normalizeBaseSymbol(req.query.base);
+
+  if (!baseSymbol) {
+    res.status(400).json({ error: 'Token is required.' });
+    return;
+  }
+
+  const symbol = symbolFromBase(baseSymbol);
+
+  try {
+    const prices = await fetchBinancePrices([symbol]);
+    res.json({ symbol, ...prices[symbol] });
+  } catch (error) {
+    res.status(502).json({ error: 'Could not load price from Binance.', details: error.message });
+  }
+}));
+
 app.get('/api/price-stats', route(async (req, res) => {
   const data = await readData();
   const period = normalizeStatsPeriod(req.query.period);

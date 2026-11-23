@@ -7,6 +7,7 @@ Single-user local crypto portfolio monitor: tracks spot purchases, buy-range tar
 ## Commands
 
 - `npm install`, then `npm start` (`npm run dev` is identical). Serves http://localhost:3000; override with `PORT`.
+- `launch.ps1` (Windows) starts the server in a minimized "Token Monitoring" console window if nothing answers on the port yet, then opens the browser. The owner's desktop shortcut "Token Monitoring" runs it.
 - There are no tests, linter or build step. Verify changes by running the app.
 - No auto-reload: restart after changing `server.js`. Files in `public/` only need a browser refresh.
 - Requires outbound access to `api.binance.com`.

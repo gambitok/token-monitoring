@@ -71,9 +71,10 @@
             </label>
             <label>
               <span>Exchange</span>
-              <input name="exchange" placeholder="Binance" autocomplete="off">
+              <input name="exchange" placeholder="Binance" autocomplete="off" list="exchangeSuggestions">
             </label>
             <button class="button" type="submit">Save Purchase</button>
+            <p class="form-total" id="assetFormTotal">Total: -</p>
           </form>
         </section>
 
@@ -196,7 +197,7 @@
               </label>
               <label>
                 <span>Exchange</span>
-                <input name="exchange" placeholder="Binance" autocomplete="off">
+                <input name="exchange" placeholder="Binance" autocomplete="off" list="exchangeSuggestions">
               </label>
               <button class="button small" type="submit">Add Purchase</button>
             </form>
@@ -207,6 +208,7 @@
       </tr>
     </template>
 
+    <datalist id="exchangeSuggestions"></datalist>
     <div class="number-tooltip" id="numberTooltip" hidden></div>
 
     <script src="/app.js" defer></script>

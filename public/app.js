@@ -14,6 +14,7 @@ const state = {
 
 const els = {
   assetForm: document.querySelector('#assetForm'),
+  assetFormTotal: document.querySelector('#assetFormTotal'),
   targetForm: document.querySelector('#targetForm'),
   activeTargetsSection: document.querySelector('#activeTargetsSection'),
   activeTargetsGrid: document.querySelector('#activeTargetsGrid'),
@@ -32,6 +33,7 @@ const els = {
   statsPeriod: document.querySelector('#statsPeriod'),
   detailsTemplate: document.querySelector('#detailsTemplate'),
   tokenSuggestions: document.querySelector('#tokenSuggestions'),
+  exchangeSuggestions: document.querySelector('#exchangeSuggestions'),
   targetTokenSuggestions: document.querySelector('#targetTokenSuggestions'),
   sortButtons: document.querySelectorAll('.sort-button'),
   tabs: document.querySelectorAll('.tab'),
@@ -105,6 +107,48 @@ function formatFull(value) {
 
 function compactCell(value, unit = 'USDT') {
   return `<span data-full="${formatFull(value)} ${unit}">${formatCompact(value)}</span>`;
+}
+
+function updateAssetFormTotal() {
+  const { baseSymbol, amount, price } = els.assetForm.elements;
+  const amountValue = parseFloat(amount.value);
+  const priceValue = parseFloat(price.value);
+
+  if (!Number.isFinite(amountValue) || !Number.isFinite(priceValue)) {
+    els.assetFormTotal.textContent = 'Total: -';
+    return;
+  }
+
+  const token = baseSymbol.value.trim().toUpperCase();
+  const total = document.createElement('strong');
+  total.textContent = formatMoney(amountValue * priceValue);
+  const detail = `${formatNumber(amountValue, 8)}${token ? ` ${token}` : ''} × ${formatNumber(priceValue, 8)}`;
+  els.assetFormTotal.replaceChildren('Total: ', total, ` (${detail})`);
+}
+
+// Fills an empty Entry Price with the token's current Binance price.
+async function prefillEntryPrice() {
+  const { baseSymbol, price } = els.assetForm.elements;
+  const token = baseSymbol.value.trim().toUpperCase();
+
+  if (!token || price.value.trim()) {
+    return;
+  }
+
+  try {
+    const data = await api(`/api/price?base=${encodeURIComponent(token)}`);
+    const current = parseApiNumber(data.price);
+
+    // Skip if the user typed a price or switched token while the request was running.
+    if (!Number.isFinite(current) || price.value.trim() || baseSymbol.value.trim().toUpperCase() !== token) {
+      return;
+    }
+
+    price.value = String(current);
+    updateAssetFormTotal();
+  } catch {
+    // No prefill when the price cannot be loaded; the field stays editable.
+  }
 }
 
 function getFormPayload(form) {
@@ -433,7 +477,7 @@ function renderDetails(asset) {
         </label>
         <label>
           <span>Exchange</span>
-          <input name="exchange" placeholder="Binance" autocomplete="off">
+          <input name="exchange" placeholder="Binance" autocomplete="off" list="exchangeSuggestions">
         </label>
         <button class="button small" type="submit">Save</button>
         <button class="button danger small delete-purchase" type="button">Delete</button>
@@ -654,8 +698,32 @@ function updateNumberTooltip(event) {
   }
 }
 
+function renderExchangeSuggestions() {
+  // One entry per exchange, case-insensitive, keeping the first spelling seen.
+  const exchanges = new Map();
+
+  for (const asset of state.assets) {
+    for (const purchase of asset.purchases) {
+      const name = (purchase.exchange || '').trim();
+
+      if (name && !exchanges.has(name.toLowerCase())) {
+        exchanges.set(name.toLowerCase(), name);
+      }
+    }
+  }
+
+  els.exchangeSuggestions.replaceChildren(...[...exchanges.values()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      return option;
+    }));
+}
+
 function render() {
   els.numberTooltip.hidden = true;
+  renderExchangeSuggestions();
   renderSummary();
   renderActiveTargets();
   renderAssets();
@@ -697,13 +765,25 @@ async function loadAll() {
   }
 }
 
+// Offered in the Token fields while they are empty.
+const DEFAULT_TOKENS = ['BTC', 'ETH', 'LINK', 'SOL'];
+
+function showDefaultTokens(datalist) {
+  datalist.replaceChildren(...DEFAULT_TOKENS.map((baseSymbol) => {
+    const option = document.createElement('option');
+    option.value = baseSymbol;
+    option.label = `${baseSymbol}USDT`;
+    return option;
+  }));
+}
+
 async function searchSymbols(query, datalist) {
   if (!datalist) {
     return;
   }
 
   if (!query || query.trim().length < 1) {
-    datalist.innerHTML = '';
+    showDefaultTokens(datalist);
     return;
   }
 
@@ -736,6 +816,8 @@ function setActiveTab(tabName) {
 }
 
 els.assetForm.elements.date.value = today();
+showDefaultTokens(els.tokenSuggestions);
+showDefaultTokens(els.targetTokenSuggestions);
 
 els.assetForm.elements.baseSymbol.addEventListener('input', (event) => {
   clearTimeout(symbolSearchTimer);
@@ -746,6 +828,16 @@ els.targetForm.elements.baseSymbol.addEventListener('input', (event) => {
   clearTimeout(targetSymbolSearchTimer);
   targetSymbolSearchTimer = setTimeout(() => searchSymbols(event.target.value, els.targetTokenSuggestions), 250);
 });
+
+els.assetForm.addEventListener('input', updateAssetFormTotal);
+
+// A pick from the suggestions arrives as a non-typing input event; blur arrives as change.
+els.assetForm.elements.baseSymbol.addEventListener('input', (event) => {
+  if (!(event instanceof InputEvent) || event.inputType === 'insertReplacementText') {
+    prefillEntryPrice();
+  }
+});
+els.assetForm.elements.baseSymbol.addEventListener('change', prefillEntryPrice);
 
 els.assetForm.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -758,6 +850,8 @@ els.assetForm.addEventListener('submit', async (event) => {
     const date = els.assetForm.elements.date.value;
     els.assetForm.reset();
     els.assetForm.elements.date.value = date || today();
+    updateAssetFormTotal();
+    showDefaultTokens(els.tokenSuggestions);
     setMessage('Purchase saved.');
     await loadAll();
   } catch (error) {
@@ -774,6 +868,7 @@ els.targetForm.addEventListener('submit', async (event) => {
       body: JSON.stringify(getFormPayload(els.targetForm))
     });
     els.targetForm.reset();
+    showDefaultTokens(els.targetTokenSuggestions);
     setMessage('Buy target saved.');
     await loadAll();
   } catch (error) {
